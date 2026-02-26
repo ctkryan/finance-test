@@ -1,0 +1,53 @@
+name: Workday Month-End Journal Download
+
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        description: "Reporting year (YYYY). Leave blank for previous month."
+        required: false
+        type: string
+      month:
+        description: "Reporting month (1-12). Leave blank for previous month."
+        required: false
+        type: string
+  schedule:
+    # 03:00 UTC on the first day of each month
+    - cron: "0 3 1 * *"
+
+jobs:
+  download-journals:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download Workday journals
+        env:
+          WORKDAY_BASE_URL: ${{ secrets.WORKDAY_BASE_URL }}
+          WORKDAY_TENANT: ${{ secrets.WORKDAY_TENANT }}
+          WORKDAY_API_TOKEN: ${{ secrets.WORKDAY_API_TOKEN }}
+        run: |
+          cmd=(python scripts/download_workday_journals.py --output-dir output)
+          if [[ -n "${{ github.event.inputs.year }}" ]]; then
+            cmd+=(--year "${{ github.event.inputs.year }}")
+          fi
+          if [[ -n "${{ github.event.inputs.month }}" ]]; then
+            cmd+=(--month "${{ github.event.inputs.month }}")
+          fi
+          "${cmd[@]}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: workday-journals-${{ github.run_id }}
+          path: output/
+          if-no-files-found: error
